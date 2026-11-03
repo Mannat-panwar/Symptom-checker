@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Symptom Checker – Know Before You Go</title>
+<style>
+:root{--bg:#f1f6f4;--card:#fff;--ink:#16302b;--mute:#5b716c;--line:#cfdcd8;--accent:#0f6e5f;--accent-ink:#fff;--warn:#b3261e;--warn-bg:#fdecea}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1a18;--card:#16241f;--ink:#e3efeb;--mute:#93a9a3;--line:#2b403a;--accent:#4fc3ad;--accent-ink:#06211c;--warn:#ff8a80;--warn-bg:#3a1c1a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 Georgia,"Times New Roman",serif;padding:max(16px,env(safe-area-inset-top)) 16px 40px}
+main{max-width:560px;margin:0 auto}
+h1{font-size:2rem;line-height:1.15;margin:24px 0 6px}
+.sub{color:var(--mute);margin:0 0 24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px}
+label{display:block;font:600 .9rem system-ui,sans-serif;margin:14px 0 6px}
+label:first-of-type{margin-top:0}
+input{width:100%;font:1rem system-ui,sans-serif;padding:11px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+input:focus,button:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.row{display:flex;gap:10px;margin-top:18px}
+button{font:600 1rem system-ui,sans-serif;padding:11px 18px;border-radius:6px;border:1px solid var(--accent);cursor:pointer}
+.go{background:var(--accent);color:var(--accent-ink);flex:1}
+.reset{background:transparent;color:var(--accent)}
+#result{margin-top:20px;border-left:5px solid var(--accent);padding:4px 0 4px 16px}
+#result.urgent{border-color:var(--warn)}
+#result h2{margin:0 0 4px;font-size:1.35rem}
+#result.urgent h2{color:var(--warn)}
+#result p{margin:4px 0;font-family:system-ui,sans-serif;font-size:.95rem}
+.hint{font:.85rem system-ui,sans-serif;color:var(--mute);margin:14px 0 0}
+.err{color:var(--warn);font:.9rem system-ui,sans-serif;margin:10px 0 0}
+.disc{margin-top:20px;padding:12px 14px;background:var(--warn-bg);border-radius:8px;font:.85rem/1.45 system-ui,sans-serif}
+footer{margin-top:24px;color:var(--mute);font:.8rem system-ui,sans-serif;text-align:center}
+footer a{color:var(--accent)}
+[hidden]{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Symptom Checker</h1>
+<p class="sub">Know before you go. Enter up to 3 symptoms to see the closest match.</p>
+
+<div class="card">
+  <label for="s1">Symptom 1</label>
+  <input id="s1" list="known" placeholder="e.g. fever" autocomplete="off">
+  <label for="s2">Symptom 2 (optional)</label>
+  <input id="s2" list="known" placeholder="e.g. cough" autocomplete="off">
+  <label for="s3">Symptom 3 (optional)</label>
+  <input id="s3" list="known" placeholder="e.g. sore throat" autocomplete="off">
+  <datalist id="known"></datalist>
+  <div class="row">
+    <button class="go" id="check">Check symptoms</button>
+    <button class="reset" id="reset">Clear</button>
+  </div>
+  <p class="hint">Start typing and pick from the suggestions, since symptoms must match exactly.</p>
+  <p class="err" id="err" role="alert" hidden></p>
+  <div id="result" aria-live="polite" hidden></div>
+</div>
+
+<div class="disc"><strong>Disclaimer:</strong> This tool does not provide medical diagnosis. It is for awareness only. Please consult a certified doctor.</div>
+<footer>Mini project for Introduction to Programming by Mannat · <a href="symptom_checker.c">View the C source</a></footer>
+</main>
+
+<script>
+/* Same database and matching logic as symptom_checker.c */
+const DB=[
+["Common Cold/Flu",["fever","cough","sore throat"],"Rest, stay hydrated."],
+["Possible Dengue",["fever","body ache","rash"],"See a doctor immediately."],
+["Migraine",["headache","nausea","light sensitivity"],"Rest in a dark room; consult if frequent."],
+["Possible Cardiac Issue",["chest pain","shortness of breath"],"Seek emergency care immediately."],
+["Food Poisoning",["stomach pain","vomiting","diarrhea"],"Stay hydrated; see a doctor if it persists."],
+["Possible Malaria",["fever","chills","joint pain"],"See a doctor and get tested."],
+["Bronchitis",["cough","chest congestion","fatigue"],"Rest; consult if it worsens."],
+["Tonsillitis",["sore throat","difficulty swallowing","fever"],"Consult a doctor."],
+["Allergic Reaction",["itchy skin","redness","swelling"],"Take antihistamine; see a doctor if severe."],
+["Possible Diabetes Symptoms",["frequent urination","excessive thirst","fatigue"],"Get blood sugar tested."],
+["Common Allergy/Cold",["runny nose","sneezing","watery eyes"],"Rest; consider antihistamines."],
+["Indigestion",["abdominal pain","bloating","constipation"],"Try dietary changes; consult if persistent."],
+["Possible Anemia",["fatigue","pale skin","dizziness"],"Blood test recommended."],
+["Ear Infection",["ear pain","fever","hearing difficulty"],"Consult an ENT specialist."],
+["Conjunctivitis",["eye redness","itching","discharge"],"Consult a doctor; avoid touching eyes."]
+];
+const $=id=>document.getElementById(id);
+const all=[...new Set(DB.flatMap(d=>d[1]))].sort();
+$("known").innerHTML=all.map(s=>`<option value="${s}">`).join("");
+
+function check(){
+  const user=["s1","s2","s3"].map(id=>$(id).value.trim().toLowerCase()).filter(Boolean);
+  const err=$("err"),res=$("result");
+  err.hidden=true;res.hidden=true;
+  if(!user.length){err.textContent="Enter at least one symptom.";err.hidden=false;return;}
+  let best=-1,bestCount=0;
+  DB.forEach((d,i)=>{
+    const n=user.filter(u=>d[1].includes(u)).length;
+    if(n>bestCount){bestCount=n;best=i;}
+  });
+  res.className="";
+  if(best>=0){
+    const [name,syms,advice]=DB[best];
+    const matched=user.filter(u=>syms.includes(u));
+    if(/immediately|emergency/i.test(advice))res.className="urgent";
+    res.innerHTML=`<h2></h2><p><strong>Advice:</strong> <span id="adv"></span></p><p id="why"></p>`;
+    res.querySelector("h2").textContent="Possible condition: "+name;
+    $("adv").textContent=advice;
+    $("why").textContent=`Matched ${bestCount} of ${user.length} symptoms: ${matched.join(", ")}.`;
+  }else{
+    res.innerHTML=`<h2>No strong match found</h2><p>Please consult a doctor for an accurate diagnosis.</p>`;
+  }
+  res.hidden=false;
+}
+$("check").addEventListener("click",check);
+["s1","s2","s3"].forEach(id=>$(id).addEventListener("keydown",e=>{if(e.key==="Enter")check();}));
+$("reset").addEventListener("click",()=>{["s1","s2","s3"].forEach(id=>$(id).value="");$("result").hidden=true;$("err").hidden=true;$("s1").focus();});
+</script>
+</body>
+</html>
